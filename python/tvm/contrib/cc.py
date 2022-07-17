@@ -249,7 +249,7 @@ def _linux_compile(output, objects, options, compile_cmd, compile_shared=False):
 
 def _windows_compile(output, objects, options):
     cmd = ["clang"]
-    cmd += ["-O2"]
+    cmd += ["-O2", "-fuse-ld=lld-link"]
 
     if output.endswith(".so") or output.endswith(".dll"):
         cmd += ["-shared"]
