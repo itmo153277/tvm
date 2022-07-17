@@ -254,7 +254,7 @@ class XGBoostCostModel(CostModel):
 
         xs, ys = [], []
         for res in result:
-            if res.status != StatusKind.COMPLETE:
+            if res.status != StatusKind.COMPLETE or res.value is None:
                 continue
             x, y = res.value
             # Features may not be the same size, pad them until they are
