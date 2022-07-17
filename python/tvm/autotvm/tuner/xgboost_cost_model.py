@@ -249,7 +249,7 @@ class XGBoostCostModel(CostModel):
 
         xs, ys = [], []
         for res in result:
-            if res.status != StatusKind.COMPLETE:
+            if res.status != StatusKind.COMPLETE or res.value is None:
                 continue
             x, y = res.value
             if len(x) == fea_len:
