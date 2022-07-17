@@ -83,7 +83,8 @@ def _make_bop(broadcast_bop, orig_bop):
             return orig_bop(lhs, rhs)
         return broadcast_bop(lhs, rhs)
 
-    _tensor_bop_impl.__doc__ = _tensor_bop_impl.__doc__.format(op=name)
+    if _tensor_bop_impl.__doc__ is not None:
+        _tensor_bop_impl.__doc__ = _tensor_bop_impl.__doc__.format(op=name)
     return _tensor_bop_impl
 
 
