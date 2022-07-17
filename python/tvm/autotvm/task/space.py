@@ -295,7 +295,7 @@ class SplitEntity(object):
         """
         ret = []
         for i in range(1, len(self.size)):
-            ax0, ax1 = sch[op].split(axis, int(np.prod(self.size[i:])))
+            ax0, ax1 = sch[op].split(axis, int(np.prod(self.size[i:], dtype=np.int64)))
             ret.append(ax0)
             axis = ax1
         return ret + [axis]
@@ -840,7 +840,7 @@ class ConfigSpace(object):
 
     def __len__(self):
         if self._length is None:
-            self._length = int(np.prod([len(x) for x in self.space_map.values()]))
+            self._length = int(np.prod([len(x) for x in self.space_map.values()], dtype=np.int64))
         return self._length
 
     def get(self, index):
@@ -1098,7 +1098,7 @@ class FallbackConfigEntity(ConfigSpace):
         for inp, _ in ref_log:
             match_score = 0
             for i, knob_name in enumerate(knob_names):
-                factors = get_factors(int(np.prod(inp.config[knob_name].size)))
+                factors = get_factors(int(np.prod(inp.config[knob_name].size, dtype=np.int64)))
                 match_score += float(len(set(factor_list[i]).intersection(factors))) / len(
                     factor_list[i]
                 )

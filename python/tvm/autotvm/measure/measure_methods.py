@@ -34,6 +34,8 @@ from collections import namedtuple
 from random import getrandbits
 import warnings
 
+import numpy as np
+
 import tvm._ffi
 import tvm.ir.transform
 from tvm import nd
@@ -238,6 +240,7 @@ class RPCRunner(Runner):
         cooldown_interval=0.1,
         enable_cpu_cache_flush=False,
         module_loader=None,
+        max_flop_limit=None,
     ):
         super(RPCRunner, self).__init__(timeout, n_parallel)
 
@@ -255,6 +258,7 @@ class RPCRunner(Runner):
         self.enable_cpu_cache_flush = enable_cpu_cache_flush
         self.cooldown_interval = cooldown_interval
         self.module_loader = module_loader
+        self.max_flop_limit = max_flop_limit
 
         self.executor = PopenPoolExecutor(
             timeout=timeout * (self.n_parallel + 1),
@@ -294,6 +298,12 @@ class RPCRunner(Runner):
                 "'python -m tvm.exec.query_rpc_tracker --port [THE PORT YOU USE]' "
                 "and make sure you have free devices on the queue status."
             )
+
+    @property
+    def min_cost_limit(self):
+        if self.task is None or self.max_flop_limit is None:
+            return None
+        return self.task.flop / self.max_flop_limit
 
     def get_build_kwargs(self):
         kwargs = {}
@@ -351,6 +361,7 @@ class RPCRunner(Runner):
                     self.ref_input,
                     self.enable_cpu_cache_flush,
                     module_loader,
+                    self.min_cost_limit
                 )
                 futures.append(ret)
 
@@ -414,6 +425,7 @@ class LocalRunner(RPCRunner):
         cooldown_interval=0.1,
         enable_cpu_cache_flush=False,
         module_loader=None,
+        max_flop_limit=None,
     ):
         super(LocalRunner, self).__init__(
             "",
@@ -428,6 +440,7 @@ class LocalRunner(RPCRunner):
             cooldown_interval=cooldown_interval,
             enable_cpu_cache_flush=enable_cpu_cache_flush,
             module_loader=module_loader,
+            max_flop_limit=max_flop_limit,
         )
         self.tracker = None
         self.server = None
@@ -438,9 +451,10 @@ class LocalRunner(RPCRunner):
         from ...rpc.tracker import Tracker
 
         self.task = task
-        tracker = Tracker(port=9000, port_end=10000, silent=True)
+        tracker = Tracker(host="127.0.0.1", port=9000, port_end=10000, silent=True)
         device_key = "$local$device$%d" % tracker.port
         server = Server(
+            host="127.0.0.1",
             port=9000,
             port_end=10000,
             key=device_key,
@@ -561,6 +575,7 @@ def run_through_rpc(
     ref_input,
     enable_cpu_cache_flush=False,
     module_loader=None,
+    min_cost_limit=None,
 ):
     """Run a generated library through rpc
 
@@ -600,6 +615,8 @@ def run_through_rpc(
         This is only has effect on CPU task.
     module_loader: ModuleLoader
         A function that returns a ContextManager used to establish and teardown the remote session.
+    min_cost_limit: float
+        Minimum meaningful cost
     """
     if isinstance(build_result, MeasureResult):
         return build_result
@@ -649,6 +666,10 @@ def run_through_rpc(
             costs = list(costs)
             costs.sort()
             costs = tuple(costs[1:-1])
+        if min_cost_limit is not None:
+            cost = np.mean(costs)
+            if cost < min_cost_limit:  # too fast
+                errno = MeasureErrorNo.WRONG_ANSWER
     except TVMError as exc:
         msg = str(exc)
         if "Stack trace returned" in msg:
