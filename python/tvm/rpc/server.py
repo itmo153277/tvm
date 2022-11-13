@@ -118,8 +118,10 @@ def _server_env(load_library, work_path=None):
     return temp
 
 
-def _serve_loop(sock, addr, load_library, work_path=None):
+def _serve_loop(sock, addr, load_library, work_path=None, silent=False):
     """Server loop"""
+    if silent:
+        logger.setLevel(logging.ERROR)
     sockfd = sock.fileno()
     temp = _server_env(load_library, work_path)
     _ffi_api.ServerLoop(sockfd)
@@ -137,7 +139,7 @@ def _parse_server_opt(opts):
     return ret
 
 
-def _listen_loop(sock, port, rpc_key, tracker_addr, load_library, custom_addr):
+def _listen_loop(sock, port, rpc_key, tracker_addr, load_library, custom_addr, silent):
     """Listening loop of the server."""
 
     def _accept_conn(listen_sock, tracker_conn, ping_period=2):
@@ -240,7 +242,7 @@ def _listen_loop(sock, port, rpc_key, tracker_addr, load_library, custom_addr):
         work_path = utils.tempdir()
         logger.info("connection from %s", addr)
         server_proc = multiprocessing.Process(
-            target=_serve_loop, args=(conn, addr, load_library, work_path)
+            target=_serve_loop, args=(conn, addr, load_library, work_path, silent)
         )
 
         server_proc.start()
@@ -263,7 +265,7 @@ def _listen_loop(sock, port, rpc_key, tracker_addr, load_library, custom_addr):
         work_path.remove()
 
 
-def _connect_proxy_loop(addr, key, load_library):
+def _connect_proxy_loop(addr, key, load_library, silent):
     key = "server:" + key
     retry_count = 0
     max_retry = 5
@@ -287,7 +289,8 @@ def _connect_proxy_loop(addr, key, load_library):
             remote_key = py_str(base.recvall(sock, keylen))
             opts = _parse_server_opt(remote_key.split()[1:])
             logger.info("connected to %s", str(addr))
-            process = multiprocessing.Process(target=_serve_loop, args=(sock, addr, load_library))
+            process = multiprocessing.Process(target=_serve_loop, args=(sock, addr, load_library,
+                                                                        None, silent))
             process.start()
             sock.close()
             process.join(opts.get("timeout", None))
@@ -349,12 +352,13 @@ class PopenRPCServerState(object):
             self.sock = sock
             self.thread = threading.Thread(
                 target=_listen_loop,
-                args=(self.sock, self.port, key, tracker_addr, load_library, self.custom_addr),
+                args=(self.sock, self.port, key, tracker_addr, load_library, self.custom_addr,
+                      silent),
             )
             self.thread.start()
         else:
             self.thread = threading.Thread(
-                target=_connect_proxy_loop, args=((host, port), key, load_library)
+                target=_connect_proxy_loop, args=((host, port), key, load_library, silent)
             )
             self.thread.start()
 
